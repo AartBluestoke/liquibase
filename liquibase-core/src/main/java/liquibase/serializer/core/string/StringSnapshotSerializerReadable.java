@@ -1,11 +1,15 @@
 package liquibase.serializer.core.string;
 
+import liquibase.configuration.GlobalConfiguration;
+import liquibase.configuration.LiquibaseConfiguration;
 import liquibase.database.Database;
 import liquibase.exception.UnexpectedLiquibaseException;
 import liquibase.serializer.LiquibaseSerializable;
 import liquibase.serializer.SnapshotSerializer;
 import liquibase.snapshot.DatabaseSnapshot;
 import liquibase.snapshot.SnapshotControl;
+import liquibase.structure.CatalogLevelObject;
+import liquibase.structure.DatabaseLevelObject;
 import liquibase.structure.DatabaseObject;
 import liquibase.structure.core.*;
 import liquibase.util.StringUtils;
@@ -69,8 +73,17 @@ public class StringSnapshotSerializerReadable implements SnapshotSerializer {
                     List<DatabaseObject> objects = new ArrayList<DatabaseObject>(snapshot.get(type));
                     ListIterator<DatabaseObject> iterator = objects.listIterator();
                     while (iterator.hasNext()) {
-                        Schema objectSchema = iterator.next().getSchema();
-                        if (objectSchema == null || !objectSchema.equals(schema)) {
+                        DatabaseObject next = iterator.next();
+                        if (next instanceof DatabaseLevelObject) {
+                            continue;
+                        }
+
+                        Schema objectSchema = next.getSchema();
+                        if (objectSchema == null) {
+                            if (!(next instanceof CatalogLevelObject) || !((CatalogLevelObject) next).getCatalog().equals(schema.getCatalog())) {
+                                iterator.remove();
+                            }
+                        } else if (!objectSchema.equals(schema)) {
                             iterator.remove();
                         }
                     }
@@ -90,7 +103,7 @@ public class StringSnapshotSerializerReadable implements SnapshotSerializer {
 
     protected void outputObjects(List objects, Class type, StringBuilder catalogBuffer) {
         List<? extends DatabaseObject> databaseObjects = sort(objects);
-        if (databaseObjects.size() > 0) {
+        if (!databaseObjects.isEmpty()) {
             catalogBuffer.append(type.getName()).append(":\n");
 
             StringBuilder typeBuffer = new StringBuilder();
@@ -109,13 +122,13 @@ public class StringSnapshotSerializerReadable implements SnapshotSerializer {
 
         final List<String> attributes = sort(databaseObject.getAttributes());
         for (String attribute : attributes) {
-            if (attribute.equals("name")) {
+            if ("name".equals(attribute)) {
                 continue;
             }
-            if (attribute.equals("schema")) {
+            if ("schema".equals(attribute)) {
                 continue;
             }
-            if (attribute.equals("catalog")) {
+            if ("catalog".equals(attribute)) {
                 continue;
             }
             Object value = databaseObject.getAttribute(attribute, Object.class);
@@ -125,7 +138,11 @@ public class StringSnapshotSerializerReadable implements SnapshotSerializer {
             }
 
             if (value instanceof DatabaseObject) {
-                if (parentObject != null && ((DatabaseObject) value).getSnapshotId().equals(parentObject.getSnapshotId())) {
+                if (
+                        (parentObject != null)
+                        && ((DatabaseObject) value).getSnapshotId() != null
+                        && ((DatabaseObject) value).getSnapshotId().equals(parentObject.getSnapshotId())
+                   ) {
                     continue;
                 }
 
@@ -137,11 +154,11 @@ public class StringSnapshotSerializerReadable implements SnapshotSerializer {
                     value = databaseObject.getSerializableFieldValue(attribute);
                 }
             } else if (value instanceof Collection) {
-                if (((Collection) value).size() == 0) {
+                if (((Collection) value).isEmpty()) {
                     value = null;
                 } else {
                     if (((Collection) value).iterator().next() instanceof DatabaseObject) {
-                        value = StringUtils.join(new TreeSet<DatabaseObject>((Collection<DatabaseObject>) value), "\n", new StringUtils.StringUtilsFormatter() {
+                        value = StringUtils.join(new TreeSet<>((Collection<DatabaseObject>) value), "\n", new StringUtils.StringUtilsFormatter() {
                             @Override
                             public String toString(Object obj) {
                                 if (obj instanceof DatabaseObject) {
@@ -173,7 +190,7 @@ public class StringSnapshotSerializerReadable implements SnapshotSerializer {
     }
 
     protected boolean shouldExpandNestedObject(Object nestedValue, DatabaseObject container) {
-        return container instanceof Table || container instanceof View;
+        return (container instanceof Table) || (container instanceof View);
     }
 
     protected void addDivider(StringBuilder buffer) {
@@ -204,6 +221,11 @@ public class StringSnapshotSerializerReadable implements SnapshotSerializer {
 
     @Override
     public void write(DatabaseSnapshot snapshot, OutputStream out) throws IOException {
-        out.write(serialize(snapshot, true).getBytes());
+        out.write(serialize(snapshot, true).getBytes(LiquibaseConfiguration.getInstance().getConfiguration(GlobalConfiguration.class).getOutputEncoding()));
+    }
+
+    @Override
+    public int getPriority() {
+        return PRIORITY_DEFAULT;
     }
 }

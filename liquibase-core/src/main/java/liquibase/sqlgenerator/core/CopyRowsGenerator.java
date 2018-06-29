@@ -6,7 +6,6 @@ import liquibase.database.core.SQLiteDatabase;
 import liquibase.exception.ValidationErrors;
 import liquibase.sql.Sql;
 import liquibase.sql.UnparsedSql;
-import liquibase.sqlgenerator.SqlGenerator;
 import liquibase.sqlgenerator.SqlGeneratorChain;
 import liquibase.statement.core.CopyRowsStatement;
 import liquibase.structure.core.Relation;
@@ -31,6 +30,11 @@ public class CopyRowsGenerator extends AbstractSqlGenerator<CopyRowsStatement> {
     @Override
     public Sql[] generateSql(CopyRowsStatement statement, Database database, SqlGeneratorChain sqlGeneratorChain) {
         StringBuffer sql = new StringBuffer();
+        
+        if (statement.getCopyColumns().isEmpty()) {
+            return new Sql[]{};
+        }
+        
         if (database instanceof SQLiteDatabase) {
             sql.append("INSERT INTO `").append(statement.getTargetTable()).append("` (");
 

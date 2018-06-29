@@ -15,10 +15,7 @@ import org.w3c.dom.NodeList;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.math.BigInteger;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 public class XMLChangeLogSerializerTest {
     @Test
@@ -36,13 +33,13 @@ public class XMLChangeLogSerializerTest {
         NamedNodeMap attributes = node.getAttributes();
         for (int i = 0; i < attributes.getLength(); i++) {
             Node attribute = attributes.item(i);
-            if (attribute.getNodeName().equals("schemaName")) {
+            if ("schemaName".equals(attribute.getNodeName())) {
                 assertEquals("SCHEMA_NAME", attribute.getNodeValue());
-            } else if (attribute.getNodeName().equals("tableName")) {
+            } else if ("tableName".equals(attribute.getNodeName())) {
                 assertEquals("TABLE_NAME", attribute.getNodeValue());
-            } else if (attribute.getNodeName().equals("columnName")) {
+            } else if ("columnName".equals(attribute.getNodeName())) {
                 assertEquals("COLUMN_NAME", attribute.getNodeValue());
-            } else if (attribute.getNodeName().equals("columnDataType")) {
+            } else if ("columnDataType".equals(attribute.getNodeName())) {
                 assertEquals("DATATYPE(255)", attribute.getNodeValue());
             } else {
                 fail("unexpected attribute " + attribute.getNodeName());
@@ -112,6 +109,7 @@ public class XMLChangeLogSerializerTest {
         change.setOnDelete("CASCADE");
         change.setOnUpdate("CASCADE");
         change.setInitiallyDeferred(true);
+        change.setValidate(true);
 
         Element node = new XMLChangeLogSerializer(DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument()).createNode(change);
         assertEquals("addForeignKeyConstraint", node.getTagName());
@@ -124,6 +122,7 @@ public class XMLChangeLogSerializerTest {
         assertEquals("REF_COL_NAME", node.getAttribute("referencedColumnNames"));
         assertEquals("true", node.getAttribute("deferrable"));
         assertEquals("true", node.getAttribute("initiallyDeferred"));
+        assertEquals("true", node.getAttribute("validate"));
         assertEquals("CASCADE", node.getAttribute("onDelete"));
         assertEquals("CASCADE", node.getAttribute("onUpdate"));
 
@@ -170,6 +169,7 @@ public class XMLChangeLogSerializerTest {
         change.setConstraintName("PK_NAME");
         change.setTablespace("TABLESPACE_NAME");
         change.setDeferrable(true);
+        change.setValidate(true);
         change.setInitiallyDeferred(true);
         change.setDisabled(true);
 
@@ -183,6 +183,7 @@ public class XMLChangeLogSerializerTest {
         assertEquals("TABLESPACE_NAME", node.getAttribute("tablespace"));
         assertEquals("true", node.getAttribute("deferrable"));
         assertEquals("true", node.getAttribute("initiallyDeferred"));
+        assertEquals("true", node.getAttribute("validate"));
     }
 
     @Test
@@ -208,6 +209,7 @@ public class XMLChangeLogSerializerTest {
         refactoring.setMaxValue(new BigInteger("2"));
         refactoring.setMinValue(new BigInteger("3"));
         refactoring.setOrdered(true);
+        refactoring.setCacheSize(new BigInteger("2008"));
 
         Element node = new XMLChangeLogSerializer(DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument()).createNode(refactoring);
         assertEquals("alterSequence", node.getNodeName());
@@ -217,6 +219,7 @@ public class XMLChangeLogSerializerTest {
         assertEquals("2", node.getAttribute("maxValue"));
         assertEquals("3", node.getAttribute("minValue"));
         assertEquals("true", node.getAttribute("ordered"));
+        assertEquals("2008", node.getAttribute("cacheSize"));
     }
 
     @Test
@@ -229,6 +232,7 @@ public class XMLChangeLogSerializerTest {
 
         ConstraintsConfig constraints = new ConstraintsConfig();
         constraints.setDeferrable(Boolean.TRUE);
+        constraints.setShouldValidate(Boolean.TRUE);
         constraints.setDeleteCascade(true);
         constraints.setForeignKeyName("FK_NAME");
         constraints.setInitiallyDeferred(true);
@@ -246,8 +250,9 @@ public class XMLChangeLogSerializerTest {
         assertEquals("some value here", element.getAttribute("value"));
 
         Element constraintsElement = (Element) element.getChildNodes().item(0);
-        assertEquals(8, constraintsElement.getAttributes().getLength());
+        assertEquals(9, constraintsElement.getAttributes().getLength());
         assertEquals("true", constraintsElement.getAttribute("deferrable"));
+        assertEquals("true", constraintsElement.getAttribute("validate"));
         assertEquals("true", constraintsElement.getAttribute("deleteCascade"));
         assertEquals("FK_NAME", constraintsElement.getAttribute("foreignKeyName"));
         assertEquals("true", constraintsElement.getAttribute("initiallyDeferred"));
@@ -270,6 +275,7 @@ public class XMLChangeLogSerializerTest {
 
         AddColumnConfig column2 = new AddColumnConfig();
         column2.setName("COL2");
+        column2.setDescending(true);
         refactoring.addColumn(column2);
 
         Element element = new XMLChangeLogSerializer(DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument()).createNode(refactoring);
@@ -282,6 +288,7 @@ public class XMLChangeLogSerializerTest {
         assertEquals("COL1", ((Element) element.getChildNodes().item(0)).getAttribute("name"));
         assertEquals("column", ((Element) element.getChildNodes().item(1)).getTagName());
         assertEquals("COL2", ((Element) element.getChildNodes().item(1)).getAttribute("name"));
+        assertEquals("true", ((Element) element.getChildNodes().item(1)).getAttribute("descending"));
     }
 
     @Test

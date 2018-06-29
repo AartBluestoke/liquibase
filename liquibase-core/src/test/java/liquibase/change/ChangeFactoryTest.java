@@ -3,8 +3,11 @@ package liquibase.change;
 import liquibase.change.core.AddAutoIncrementChange;
 import liquibase.change.core.CreateTableChange;
 import liquibase.change.core.DropTableChange;
+import liquibase.database.core.MSSQLDatabase;
 import liquibase.exception.UnexpectedLiquibaseException;
 import liquibase.servicelocator.LiquibaseService;
+import liquibase.sqlgenerator.SqlGeneratorFactory;
+import liquibase.statement.core.CreateSequenceStatement;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -24,6 +27,28 @@ public class ChangeFactoryTest {
     @After
     public void resetRegistry() {
         ChangeFactory.reset();
+    }
+
+    @Test
+    public void supportStatement() {
+        CreateSequenceStatement statement = new CreateSequenceStatement(null, null, "seq_my_table");
+        MSSQLDatabase database10 = new MSSQLDatabase() {
+            @Override
+            public int getDatabaseMajorVersion() {
+                return MSSQL_SERVER_VERSIONS.MSSQL2008;
+            }
+        };
+
+        MSSQLDatabase database11 = new MSSQLDatabase() {
+            @Override
+            public int getDatabaseMajorVersion() {
+                return MSSQL_SERVER_VERSIONS.MSSQL2012;
+            }
+        };
+
+        ChangeFactory.getInstance(); //make sure there is no problem with SqlGeneratorFactory.generatorsByKey cache
+        assertFalse("unsupported create sequence", SqlGeneratorFactory.getInstance().supports(statement, database10));
+        assertTrue("supported create sequence", SqlGeneratorFactory.getInstance().supports(statement, database11));
     }
 
     @Test
@@ -160,7 +185,7 @@ public class ChangeFactoryTest {
         assertTrue(change instanceof CreateTableChange);
 
     }
-
+    
     @LiquibaseService(skip = true)
     public static class Priority5Change extends CreateTableChange {
         @Override
@@ -199,7 +224,7 @@ public class ChangeFactoryTest {
 
     @LiquibaseService(skip = true)
     public static class SometimesExceptionThrowingChange extends CreateTableChange {
-        private static int timesCalled = 0;
+        private static int timesCalled;
         public SometimesExceptionThrowingChange() {
             if (timesCalled > 1) {
                 throw new RuntimeException("I throw exceptions");

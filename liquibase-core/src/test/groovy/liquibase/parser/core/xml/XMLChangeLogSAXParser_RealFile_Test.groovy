@@ -21,6 +21,8 @@ import liquibase.changelog.ChangeSet
 import liquibase.changelog.DatabaseChangeLog
 import liquibase.configuration.LiquibaseConfiguration
 import liquibase.database.ObjectQuotingStrategy
+import liquibase.database.core.H2Database
+import liquibase.database.core.MSSQLDatabase
 import liquibase.sdk.database.MockDatabase
 import liquibase.exception.ChangeLogParseException
 import liquibase.precondition.CustomPreconditionWrapper
@@ -137,9 +139,9 @@ public class XMLChangeLogSAXParser_RealFile_Test extends Specification {
         changeLog.getChangeSets().get(1).getComments() == "Testing add column"
         assert changeLog.getChangeSets().get(1).shouldAlwaysRun()
         assert changeLog.getChangeSets().get(1).shouldRunOnChange()
-        changeLog.getChangeSets().get(1).getRollBackChanges().length == 2
-        assert changeLog.getChangeSets().get(1).getRollBackChanges()[0] instanceof RawSQLChange
-        assert changeLog.getChangeSets().get(1).getRollBackChanges()[1] instanceof RawSQLChange
+        changeLog.getChangeSets().get(1).rollback.changes.size() == 2
+        assert changeLog.getChangeSets().get(1).rollback.changes[0] instanceof RawSQLChange
+        assert changeLog.getChangeSets().get(1).rollback.changes[1] instanceof RawSQLChange
 
         ChangeFactory.getInstance().getChangeMetaData(changeLog.getChangeSets().get(1).getChanges()[0]).getName() == "addColumn"
         assert changeLog.getChangeSets().get(1).getChanges()[0] instanceof AddColumnChange
@@ -186,7 +188,9 @@ public class XMLChangeLogSAXParser_RealFile_Test extends Specification {
     def "changelog with preconditions can be parsed: preconditionsChangeLog.xml"() throws Exception {
         when:
         def path = "liquibase/parser/core/xml/preconditionsChangeLog.xml"
-        def changeLog = new XMLChangeLogSAXParser().parse(path, new ChangeLogParameters(), new JUnitResourceAccessor());
+        def params = new ChangeLogParameters()
+        params.set("loginUser", "testUser")
+        def changeLog = new XMLChangeLogSAXParser().parse(path, params, new JUnitResourceAccessor());
 
         then:
         changeLog.getLogicalFilePath() == path
@@ -340,7 +344,7 @@ public class XMLChangeLogSAXParser_RealFile_Test extends Specification {
 		changeLog.getChangeSets()[0].getId() == "1"
         changeLog.getChangeSets()[0].comments == "Some values: overridden: 'Value passed in', not.overridden: 'value from changelog 2', database: 'database mock', contextNote: 'context prod', contextNote2: '\${contextNote2}'"
 		((RawSQLChange) changeLog.getChangeSets()[0].getChanges()[0]).getSql() == "create table my_table_name;"
-		((RawSQLChange) changeLog.getChangeSets()[0].getRollBackChanges()[0]).getSql() == "drop table my_table_name"
+		((RawSQLChange) changeLog.getChangeSets()[0].rollback.changes[0]).getSql() == "drop table my_table_name"
 
         and: "changeSet 2"
         changeLog.getChangeSets().get(1).getAuthor() == "nvoxland"
@@ -483,29 +487,31 @@ public class XMLChangeLogSAXParser_RealFile_Test extends Specification {
         ((RawSQLChange) changeLog.getChangeSet(path, "nvoxland", "changeSet with UTF8").changes[0]).sql == "insert into testutf8insert (stringvalue) values ('string with € and £')"
 
         and: "rollback blocks are parsed correctly"
-        changeLog.getChangeSet(path, "nvoxland", "standard changeSet").rollBackChanges.size() == 0
+        changeLog.getChangeSet(path, "nvoxland", "standard changeSet").rollback.changes.size() == 0
 
-        changeLog.getChangeSet(path, "nvoxland", "one rollback block").rollBackChanges.length == 1
-        ((RawSQLChange) changeLog.getChangeSet(path, "nvoxland", "one rollback block").rollBackChanges[0]).sql == "drop table rollback_test"
+        changeLog.getChangeSet(path, "nvoxland", "one rollback block").rollback.changes.size() == 1
+        ((RawSQLChange) changeLog.getChangeSet(path, "nvoxland", "one rollback block").rollback.changes[0]).sql == "drop table rollback_test"
 
-        changeLog.getChangeSet(path, "nvoxland", "empty rollback block").rollBackChanges.size() == 1
-        assert changeLog.getChangeSet(path, "nvoxland", "empty rollback block").rollBackChanges[0] instanceof EmptyChange
+        changeLog.getChangeSet(path, "nvoxland", "empty rollback block").rollback.changes.size() == 1
+        assert changeLog.getChangeSet(path, "nvoxland", "empty rollback block").rollback.changes[0] instanceof EmptyChange
 
 
-        changeLog.getChangeSet(path, "nvoxland", "multiple rollback blocks").rollBackChanges.length == 7
-        ((RawSQLChange) changeLog.getChangeSet(path, "nvoxland", "multiple rollback blocks").rollBackChanges[0]).sql == "drop table multiRollback1"
-        ((RawSQLChange) changeLog.getChangeSet(path, "nvoxland", "multiple rollback blocks").rollBackChanges[1]).sql == "drop table multiRollback2"
-        ((RawSQLChange) changeLog.getChangeSet(path, "nvoxland", "multiple rollback blocks").rollBackChanges[2]).sql == "drop table multiRollback3"
-        ((DropTableChange) changeLog.getChangeSet(path, "nvoxland", "multiple rollback blocks").rollBackChanges[3]).tableName == "multiRollback4"
-        ((DropTableChange) changeLog.getChangeSet(path, "nvoxland", "multiple rollback blocks").rollBackChanges[4]).tableName == "multiRollback5"
-        ((DropTableChange) changeLog.getChangeSet(path, "nvoxland", "multiple rollback blocks").rollBackChanges[5]).tableName == "multiRollback6"
-        ((RawSQLChange) changeLog.getChangeSet(path, "nvoxland", "multiple rollback blocks").rollBackChanges[6]).sql == "select * from simple"
+        changeLog.getChangeSet(path, "nvoxland", "multiple rollback blocks").rollback.changes.size() == 7
+        ((RawSQLChange) changeLog.getChangeSet(path, "nvoxland", "multiple rollback blocks").rollback.changes[0]).sql == "drop table multiRollback1"
+        ((RawSQLChange) changeLog.getChangeSet(path, "nvoxland", "multiple rollback blocks").rollback.changes[1]).sql == "drop table multiRollback2"
+        ((RawSQLChange) changeLog.getChangeSet(path, "nvoxland", "multiple rollback blocks").rollback.changes[2]).sql == "drop table multiRollback3"
+        ((DropTableChange) changeLog.getChangeSet(path, "nvoxland", "multiple rollback blocks").rollback.changes[3]).tableName == "multiRollback4"
+        ((DropTableChange) changeLog.getChangeSet(path, "nvoxland", "multiple rollback blocks").rollback.changes[4]).tableName == "multiRollback5"
+        ((DropTableChange) changeLog.getChangeSet(path, "nvoxland", "multiple rollback blocks").rollback.changes[5]).tableName == "multiRollback6"
+        ((RawSQLChange) changeLog.getChangeSet(path, "nvoxland", "multiple rollback blocks").rollback.changes[6]).sql == "select * from simple"
 
     }
     def "tests for particular features and edge conditions part 3 testCasesChangeLog.xml"() throws Exception {
         when:
         def path = "liquibase/parser/core/xml/testCasesChangeLog.xml"
-        DatabaseChangeLog changeLog = new XMLChangeLogSAXParser().parse(path, new ChangeLogParameters(), new JUnitResourceAccessor());
+        def params = new ChangeLogParameters()
+        params.set("loginUser", "sa")
+        DatabaseChangeLog changeLog = new XMLChangeLogSAXParser().parse(path, params, new JUnitResourceAccessor());
 
 
         then: "complex preconditions are parsed"
@@ -692,5 +698,25 @@ public class XMLChangeLogSAXParser_RealFile_Test extends Specification {
 
         cleanup:
         ChangeFactory.getInstance().unregister("createTableExample")
+    }
+
+    def "change sets with matching dbms are parsed"() {
+        when:
+        def path = "liquibase/parser/core/xml/rollbackWithDbmsChangeLog.xml"
+        def database = new MSSQLDatabase()
+        def changeLog = new XMLChangeLogSAXParser().parse(path, new ChangeLogParameters(database), new JUnitResourceAccessor())
+
+        then:
+        changeLog.getChangeSets().size() == 4
+    }
+
+    def "change sets with non-matching dbms are skipped"() {
+        when:
+        def path = "liquibase/parser/core/xml/rollbackWithDbmsChangeLog.xml"
+        def database = new H2Database()
+        def changeLog = new XMLChangeLogSAXParser().parse(path, new ChangeLogParameters(database), new JUnitResourceAccessor())
+
+        then:
+        changeLog.getChangeSets().size() == 2
     }
 }
